@@ -4,7 +4,7 @@ import os
 
 app = FastAPI()
 
-# You will get this API Key from HiveModeration.com
+# Your API Key is safely stored in this variable
 HIVE_API_KEY = "hyRTmij5G6i08V41DMzPOw=="
 HIVE_URL = "https://api.thehive.ai/api/v2/models/ai_generated_image_detection/predict"
 
@@ -14,19 +14,28 @@ async def detect_ai(file: UploadFile = File(...)):
     content = await file.read()
     
     # 2. Prepare the request for the Hive AI
-    headers = {"Authorization": f"token {hyRTmij5G6i08V41DMzPOw==}"}
+    # FIX: We use the variable HIVE_API_KEY here instead of the raw key
+    headers = {"Authorization": f"token {HIVE_API_KEY}"}
     files = {"media": (file.filename, content, file.content_type)}
 
     # 3. Ask Hive if it's AI
-    response = requests.post(HIVE_URL, headers=headers, files=files)
-    
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="AI Detection Service failed")
+    try:
+        response = requests.post(HIVE_URL, headers=headers, files=files)
+        
+        if response.status_code != 200:
+            # This helps you see the actual error from Hive if it fails
+            return {"error": "Hive API Error", "details": response.text}
 
-    # 4. Return the result back to your Base44 site
-    data = response.json()
-    return {
-        "is_ai": data['status'][0]['class'] == 'yes',
-        "confidence": data['status'][0]['score'],
-        "message": "Analysis complete by BigFat Tech Solution"
-    }
+        # 4. Return the result back to your Base44 site
+        data = response.json()
+        
+        # Hive returns a list of results, we take the first one
+        status_data = data.get('status', [{}])[0]
+        
+        return {
+            "is_ai": status_data.get('class') == 'yes',
+            "confidence": status_data.get('score', 0),
+            "message": "Analysis complete by BigFat Tech Solution"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
